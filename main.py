@@ -3,6 +3,7 @@ import os.path  # To manage paths
 import sys  # To find out the script name (in argv[0])
 import backtrader as bt
 import pandas as pd  # 添加 pandas 库
+import matplotlib.pyplot as plt  # 添加 matplotlib 库
 
 class TestStrategy(bt.Strategy):
     params = (
@@ -20,6 +21,8 @@ class TestStrategy(bt.Strategy):
         self.buycomm = None
         self.sma = bt.indicators.SimpleMovingAverage(
             self.datas[0], period=self.params.maperiod)
+        self.macd = bt.indicators.MACD(self.datas[0])
+        self.macd_diff = self.macd.macd - self.macd.signal  # 快线减去慢线
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -66,6 +69,17 @@ class TestStrategy(bt.Strategy):
                 self.log('SELL CREATE, %.2f' % self.dataclose[0])
                 self.order = self.sell()
 
+        if self.macd.macd[0] > self.macd.signal[0]:
+            self.log('MACD Crossover: BUY Signal')
+        elif self.macd.macd[0] < self.macd.signal[0]:
+            self.log('MACD Crossover: SELL Signal')
+
+    def plot(self, *args, **kwargs):
+        # 在图中绘制 MACD 快线减慢线的柱状图
+        plt.bar(range(len(self.macd_diff)), self.macd_diff, label='MACD Diff', color='blue')
+        plt.legend()
+        plt.show()
+
 if __name__ == '__main__':
     cerebro = bt.Cerebro()
     cerebro.addstrategy(TestStrategy)
@@ -102,4 +116,7 @@ if __name__ == '__main__':
     cerebro.run()
 
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    cerebro.plot()
+    cerebro.plot(style='candlestick', plotname='Test Strategy')
+    # cerebro.plot(style='line', plotname='Test Strategy')
+    # cerebro.plot(style='bar', plotname='Test Strategy')
+    # cerebro.plot(style='candle', plotname='Test Strategy')
