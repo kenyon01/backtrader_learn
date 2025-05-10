@@ -37,7 +37,8 @@ class TestStrategy(bt.Strategy):
         self.buycomm = None
         self.sma = bt.indicators.SimpleMovingAverage(
             self.datas[0], period=self.params.maperiod)
-        self.macd = bt.indicators.MACD(self.datas[0])
+        # self.macd = bt.indicators.MACD(self.datas[0])
+        self.macd = bt.indicators.MACDHisto(self.datas[0])
         self.macd_diff = MACDDiff(self.datas[0])  # 使用自定义MACD差值指标
 
     def notify_order(self, order):
@@ -76,14 +77,34 @@ class TestStrategy(bt.Strategy):
         if self.order:
             return
 
+        # if not self.position:
+        #     if self.dataclose[0] > self.sma[0]:
+        #         self.log('BUY CREATE, %.2f' % self.dataclose[0])
+        #         self.order = self.buy()
+        # else:
+        #     if self.dataclose[0] < self.sma[0]:
+        #         self.log('SELL CREATE, %.2f' % self.dataclose[0])
+        #         self.order = self.sell()
+
         if not self.position:
-            if self.dataclose[0] > self.sma[0]:
+            # Calculate the 3-day average of the MACD histogram
+            macd_hist_avg = sum(self.macd.histo.get(size=3)) / 3
+
+            if self.macd.histo[0] > macd_hist_avg:
                 self.log('BUY CREATE, %.2f' % self.dataclose[0])
                 self.order = self.buy()
         else:
-            if self.dataclose[0] < self.sma[0]:
+            # Calculate the 3-day average of the MACD histogram
+            macd_hist_avg = sum(self.macd.histo.get(size=3)) / 3
+
+            if self.macd.histo[0] < macd_hist_avg:
                 self.log('SELL CREATE, %.2f' % self.dataclose[0])
                 self.order = self.sell()
+        # else:
+        #     if (self.macd_diff[0] < self.macd_diff[-1]) and (self.dataclose[0] < self.dataclose[-1]):
+        #         self.log('SELL CREATE, %.2f' % self.dataclose[0])
+        #         self.order = self.sell()
+
 
         if self.macd.macd[0] > self.macd.signal[0]:
             self.log('MACD Crossover: BUY Signal')
@@ -95,29 +116,31 @@ if __name__ == '__main__':
     cerebro.addstrategy(TestStrategy)
 
     modpath = os.path.dirname(os.path.abspath(sys.argv[0]))
-    datapath = os.path.join(modpath, 'sh.000003.csv')
+    datapath = os.path.join(modpath, 'data/513050.csv')
 
     # 使用 pandas 读取 CSV 文件，并将时间列解析为 datetime 对象
     df = pd.read_csv(datapath, encoding='utf-8', parse_dates=['date'])
+    df = df.dropna(subset=['date'])  # 删除日期列为空的行
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')  # 确保日期格式正确
 
     # 确保时间列的名称与 CSV 文件中的列名一致
 
     # 将 pandas DataFrame 转换为 backtrader 数据格式
     data = bt.feeds.PandasData(
         dataname=df,
-        fromdate=datetime.datetime(2010, 1, 1),
-        todate=datetime.datetime(2010, 12, 31),
-        datetime=0,
-        open=3,
-        high=4,
-        low=5,    
-        close=6,
-        volume=8
+        fromdate=datetime.datetime(2024, 1, 1),
+        todate=datetime.datetime(2024, 12, 31),
+        datetime=0,  # 确保这里的索引与 `date` 列的位置一致
+        open=1,
+        high=2,
+        low=3,    
+        close=4,
+        volume=5
 
     )
 
     cerebro.adddata(data)
-    cerebro.broker.setcash(1000.0)
+    cerebro.broker.setcash(1000000000.0)
     cerebro.addsizer(bt.sizers.FixedSize, stake=10)
     cerebro.broker.setcommission(commission=0.0)
 
